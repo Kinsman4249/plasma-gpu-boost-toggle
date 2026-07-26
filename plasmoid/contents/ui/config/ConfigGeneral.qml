@@ -19,13 +19,19 @@ Kirigami.FormLayout {
 	// Build/version stamp, only shown when debug logging is on, so it is
 	// easy to tell which build a bug report came from. Bump the date
 	// suffix (YYYY-MM-DD.N) whenever this plasmoid is changed.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-25.2"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.1"
 
-	// Unprivileged DataSource used only to read power.min_limit / power.limit
-	// / power.max_limit from nvidia-smi, both to suggest starting values and
-	// to size the SpinBox ranges below to what THIS card actually supports.
-	// This never touches root and is separate from the pkexec calls the main
-	// widget makes.
+	// Unprivileged DataSource used only to read power.min_limit /
+	// power.default_limit / power.max_limit from nvidia-smi, both to
+	// suggest starting values and to size the SpinBox ranges below to
+	// what THIS card actually supports. This never touches root and is
+	// separate from the pkexec calls the main widget makes.
+	//
+	// power.default_limit, not power.limit: power.limit reports "[N/A]"
+	// until nvidia-smi -pl has been explicitly run at least once since
+	// boot on some cards (e.g. laptop GPUs), which made this query fail
+	// with "Unexpected nvidia-smi output" on a freshly booted machine.
+	// power.default_limit is always a real number.
 	Plasma5Support.DataSource {
 		id: queryExecutable
 		engine: "executable"
@@ -74,7 +80,7 @@ Kirigami.FormLayout {
 
 	function queryGpu() {
 		queryStatusLabel.text = i18n("Querying nvidia-smi...")
-		queryExecutable.exec("nvidia-smi --query-gpu=power.min_limit,power.limit,power.max_limit --format=csv,noheader")
+		queryExecutable.exec("nvidia-smi --query-gpu=power.min_limit,power.default_limit,power.max_limit --format=csv,noheader")
 	}
 
 	// On first open, if nothing has been configured yet, query automatically.

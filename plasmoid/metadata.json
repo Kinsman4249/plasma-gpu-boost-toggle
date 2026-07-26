@@ -8,7 +8,7 @@
 		],
 		"Category": "System Information",
 		"Description": "Toggle an NVIDIA GPU between a default power limit and a boosted power limit from the panel. Requires nvidia-smi.",
-		"Icon": "utilities-system-monitor",
+		"Icon": "com.kinsman4249.gpuboosttoggle",
 		"Id": "com.kinsman4249.gpuboosttoggle",
 		"License": "GPL-3.0-or-later",
 		"Name": "GPU Boost Toggle",

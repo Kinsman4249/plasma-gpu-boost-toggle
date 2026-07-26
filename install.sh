@@ -34,6 +34,19 @@ HELPER_DEST="/usr/local/bin/gpu-boost-helper.sh"
 POLICY_SRC="$SCRIPT_DIR/com.kinsman4249.gpuboost.policy"
 POLICY_DEST="/usr/local/share/polkit-1/actions/com.kinsman4249.gpuboost.policy"
 
+# Plasma's widget explorer, config-page sidebar, and panel icon all
+# resolve icons through the user's icon theme (QIcon::fromTheme), not by
+# reading files bundled inside the plasmoid package directly - see
+# https://develop.kde.org/docs/plasma/widget/properties/ ("Icon" only
+# accepts icon-theme names). So the plasmoid's custom icon has to be
+# installed here too, independent of however the widget package itself
+# gets installed (kpackagetool6 or the "Install Widget From Local File"
+# dialog), or metadata.json's Icon reference to it would 404 into a
+# generic broken-image icon instead of falling back to something valid.
+ICON_SRC="$SCRIPT_DIR/plasmoid/contents/icons/com.kinsman4249.gpuboosttoggle.svg"
+ICON_DEST_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+ICON_DEST="$ICON_DEST_DIR/com.kinsman4249.gpuboosttoggle.svg"
+
 fail() {
 	echo "Error: $1" >&2
 	exit 1
@@ -63,6 +76,7 @@ command -v pkaction >/dev/null 2>&1 \
 
 [ -f "$HELPER_SRC" ] || fail "missing $HELPER_SRC"
 [ -f "$POLICY_SRC" ] || fail "missing $POLICY_SRC"
+[ -f "$ICON_SRC" ] || fail "missing $ICON_SRC"
 
 # ---------------------------------------------------------------------------
 # Root file placement (interactive sudo, one prompt per step)
@@ -75,6 +89,21 @@ sudo install -o root -g root -m 0755 "$HELPER_SRC" "$HELPER_DEST" \
 step "Installing polkit policy to $POLICY_DEST (requires sudo)"
 sudo install -D -o root -g root -m 0644 "$POLICY_SRC" "$POLICY_DEST" \
 	|| fail "failed to install $POLICY_DEST"
+
+# ---------------------------------------------------------------------------
+# Icon install (no sudo: this lives entirely under the user's home)
+# ---------------------------------------------------------------------------
+
+step "Installing widget icon to $ICON_DEST"
+install -D -m 0644 "$ICON_SRC" "$ICON_DEST" \
+	|| fail "failed to install $ICON_DEST"
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+	gtk-update-icon-cache -q -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+fi
+if command -v kbuildsycoca6 >/dev/null 2>&1; then
+	kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
+fi
 
 step "Done"
 echo "Now install the widget itself (no sudo needed):"

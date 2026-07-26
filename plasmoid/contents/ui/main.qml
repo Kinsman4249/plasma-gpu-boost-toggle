@@ -20,7 +20,7 @@ PlasmoidItem {
 	// Bumped whenever this file (or its config page) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.1"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.2"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts
@@ -35,10 +35,17 @@ PlasmoidItem {
 	property bool busy: false
 	property bool pollFailed: false
 
+	// These two must be icon-theme names, not Qt.resolvedUrl() file
+	// paths: Kirigami.Icon (below) rendered a raw file:// source as a
+	// blank/invisible icon in the panel on this Plasma build, even though
+	// the same source loaded fine in notifications and the widget
+	// explorer. install.sh installs these into
+	// ~/.local/share/icons/hicolor/scalable/apps/ so the theme name
+	// resolves.
 	Plasmoid.icon: !configured ? "dialog-warning"
 		: busy ? "view-refresh"
-		: boosted ? Qt.resolvedUrl("icons/icon-on.svg")
-		: Qt.resolvedUrl("icons/icon-off.svg")
+		: boosted ? "com.kinsman4249.gpuboosttoggle-on"
+		: "com.kinsman4249.gpuboosttoggle-off"
 
 	toolTipMainText: i18n("GPU Boost Toggle")
 	toolTipSubText: {
@@ -84,12 +91,66 @@ PlasmoidItem {
 		}
 	}
 
+	// enforced.power.limit (not power.limit) because power.limit reports
+	// "[N/A]" until nvidia-smi -pl has been explicitly run at least once
+	// since boot on some cards; enforced.power.limit always reflects the
+	// power ceiling actually in effect right now.
 	readonly property string statusCmd:
-		"nvidia-smi --query-gpu=power.limit,persistence_mode --format=csv,noheader"
+		"nvidia-smi --query-gpu=enforced.power.limit,persistence_mode --format=csv,noheader"
 
 	function pollStatus() {
 		root.log("polling GPU status")
 		executable.exec(statusCmd)
+	}
+
+	// Separate, one-shot DataSource for the first-run auto-configure query
+	// below, kept apart from "executable" so it can't collide with a
+	// status poll or toggle request that happens to be in flight.
+	Plasma5Support.DataSource {
+		id: autoConfigure
+		engine: "executable"
+		connectedSources: []
+		onNewData: (sourceName, data) => {
+			disconnectSource(sourceName)
+			const exitCode = data["exit code"]
+			const stdout = (data["stdout"] || "").toString().trim()
+			if (exitCode !== 0 || stdout.length === 0) {
+				root.log("auto-configure: could not query nvidia-smi, leaving unconfigured")
+				return
+			}
+			// Expected line shape: "1.00 W, 125.00 W, 140.00 W"
+			const parts = stdout.split(",")
+			if (parts.length < 3) {
+				root.log("auto-configure: unexpected nvidia-smi output: " + stdout)
+				return
+			}
+			const min = parseFloat(parts[0])
+			const def = parseFloat(parts[1])
+			const max = parseFloat(parts[2])
+			if (isNaN(min) || isNaN(def) || isNaN(max)) {
+				root.log("auto-configure: unexpected nvidia-smi output: " + stdout)
+				return
+			}
+			Plasmoid.configuration.defaultWatts = Math.round(def)
+			Plasmoid.configuration.boostWatts = Math.round(max)
+			root.log("auto-configure: set defaultWatts=" + Plasmoid.configuration.defaultWatts
+				+ " boostWatts=" + Plasmoid.configuration.boostWatts)
+		}
+		function exec(cmd) {
+			connectSource(cmd)
+		}
+	}
+
+	// Runs once, the first time this widget instance loads with no watt
+	// values set yet, so it works the moment it is dragged onto a panel
+	// and never requires opening the settings dialog first. Uses
+	// power.default_limit (not power.limit, see statusCmd above) for the
+	// same [N/A]-until-first-set reason.
+	Component.onCompleted: {
+		if (!configured) {
+			root.log("not configured yet, auto-querying nvidia-smi for suggested watt values")
+			autoConfigure.exec("nvidia-smi --query-gpu=power.min_limit,power.default_limit,power.max_limit --format=csv,noheader")
+		}
 	}
 
 	function toggle() {

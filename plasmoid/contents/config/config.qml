@@ -6,7 +6,7 @@ import org.kde.plasma.configuration
 ConfigModel {
 	ConfigCategory {
 		name: i18n("General")
-		icon: "utilities-system-monitor"
+		icon: "com.kinsman4249.gpuboosttoggle"
 		source: "config/ConfigGeneral.qml"
 	}
 }
