@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.2.2
+
+Refactored ConfigAdvanced.qml and ConfigGeneral.qml from manual QQC2.ScrollView containers to Kirigami.ScrollablePage, the proper framework widget for scrollable forms in Plasma. This avoids potential layout conflicts with the dialog's own scroll handling and ensures the form layout operates correctly. Added Layout.fillWidth to CheckBox and Label elements so text wrapping behavior works as intended, and added explicit horizontalScrollBarPolicy configuration to prevent unwanted horizontal scrolling.
+
 ## v1.2.1
 
 Changed default values for all three advanced axes (serviceIdlingEnabled, powerProfileEnabled, chromeIdlingEnabled) from false to true. Each axis degrades gracefully and independently, so enabling them by default provides maximum boost without risk. The ConfigAdvanced.qml and ConfigGeneral.qml pages have been wrapped in QQC2.ScrollView containers to ensure content remains accessible when the config dialog window is smaller than the content height (previously, overflow content was unreachable without a scrollbar). The version stamp has been bumped to 2026-07-26.8 in main.qml and ConfigGeneral.qml.

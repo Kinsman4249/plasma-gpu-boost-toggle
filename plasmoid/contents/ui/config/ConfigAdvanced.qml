@@ -8,14 +8,24 @@ import org.kde.kirigami as Kirigami
 // page from ConfigGeneral.qml since power limits + these two axes would
 // crowd a single form. See SystemController.qml for the logic these
 // settings drive.
-// Wrapped in a ScrollView: this page's content (four sections' worth of
-// checkboxes/fields/explanatory text) is taller than the config dialog's
-// fixed window height, and without a scroll container the bottom of the
-// page was simply unreachable - no scrollbar, no way to see or click it.
-QQC2.ScrollView {
+//
+// Root is Kirigami.ScrollablePage, not a plain FormLayout: this page's
+// content (four sections' worth of checkboxes/fields/explanatory text) is
+// taller than the config dialog's fixed window height, and a plain
+// FormLayout has no scrolling of its own, so the bottom of the page was
+// simply unreachable. ScrollablePage is the framework's own answer to this
+// (see its class docs: "Do not put a ScrollView inside of a
+// ScrollablePage" - wrapping the FormLayout in a manual QQC2.ScrollView
+// instead broke the FormLayout outright, since the config dialog's page
+// host already manages a ScrollView-like container itself).
+Kirigami.ScrollablePage {
 	id: root
 
-	contentWidth: availableWidth
+	// No horizontal scrollbar: every text/checkbox label below either has
+	// wrapMode set explicitly, or (for QQC2.CheckBox) has Layout.fillWidth
+	// set so the style's own wrapMode: Text.Wrap can actually kick in
+	// instead of the checkbox just growing wider than the page.
+	horizontalScrollBarPolicy: QQC2.ScrollBar.AlwaysOff
 
 	property alias cfg_serviceIdlingEnabled: idlingEnabledCheck.checked
 	property alias cfg_idleBaloo: idleBalooCheck.checked
@@ -27,127 +37,135 @@ QQC2.ScrollView {
 	property alias cfg_chromeProcessPattern: chromePatternField.text
 	property alias cfg_chromeNiceValue: chromeNiceField.value
 
-Kirigami.FormLayout {
-	id: page
-	width: root.availableWidth
+	Kirigami.FormLayout {
+		id: page
 
-	QQC2.Label {
-		Kirigami.FormData.isSection: true
-		text: i18n("Background services")
-	}
+		QQC2.Label {
+			Kirigami.FormData.isSection: true
+			text: i18n("Background services")
+		}
 
-	QQC2.CheckBox {
-		id: idlingEnabledCheck
-		Kirigami.FormData.label: i18n("Idle services while boosted:")
-		text: i18n("Pause the services below while BOOST is active")
-	}
+		QQC2.CheckBox {
+			id: idlingEnabledCheck
+			Kirigami.FormData.label: i18n("Idle services while boosted:")
+			text: i18n("Pause the services below while BOOST is active")
+			Layout.fillWidth: true
+		}
 
-	QQC2.CheckBox {
-		id: idleBalooCheck
-		Kirigami.FormData.label: i18n("Baloo:")
-		text: i18n("Suspend the file indexer (balooctl suspend/resume)")
-		enabled: idlingEnabledCheck.checked
-	}
+		QQC2.CheckBox {
+			id: idleBalooCheck
+			Kirigami.FormData.label: i18n("Baloo:")
+			text: i18n("Suspend the file indexer (balooctl suspend/resume)")
+			enabled: idlingEnabledCheck.checked
+			Layout.fillWidth: true
+		}
 
-	QQC2.CheckBox {
-		id: idleAkonadiCheck
-		Kirigami.FormData.label: i18n("Akonadi:")
-		text: i18n("Stop PIM/mail sync (akonadictl stop/start)")
-		enabled: idlingEnabledCheck.checked
-	}
+		QQC2.CheckBox {
+			id: idleAkonadiCheck
+			Kirigami.FormData.label: i18n("Akonadi:")
+			text: i18n("Stop PIM/mail sync (akonadictl stop/start)")
+			enabled: idlingEnabledCheck.checked
+			Layout.fillWidth: true
+		}
 
-	QQC2.CheckBox {
-		id: idleKalarmCheck
-		Kirigami.FormData.label: i18n("KAlarm:")
-		text: i18n("Stop kalarm.service, if present on this system")
-		enabled: idlingEnabledCheck.checked
-	}
+		QQC2.CheckBox {
+			id: idleKalarmCheck
+			Kirigami.FormData.label: i18n("KAlarm:")
+			text: i18n("Stop kalarm.service, if present on this system")
+			enabled: idlingEnabledCheck.checked
+			Layout.fillWidth: true
+		}
 
-	QQC2.TextArea {
-		id: customUnitsField
-		Kirigami.FormData.label: i18n("Custom units:")
-		placeholderText: i18n("One systemctl --user unit per line, e.g. my-sync.service")
-		enabled: idlingEnabledCheck.checked
-		Layout.fillWidth: true
-		Layout.preferredHeight: Kirigami.Units.gridUnit * 4
-	}
+		QQC2.TextArea {
+			id: customUnitsField
+			Kirigami.FormData.label: i18n("Custom units:")
+			placeholderText: i18n("One systemctl --user unit per line, e.g. my-sync.service")
+			enabled: idlingEnabledCheck.checked
+			Layout.fillWidth: true
+			Layout.preferredHeight: Kirigami.Units.gridUnit * 4
+		}
 
-	QQC2.Label {
-		Kirigami.FormData.label: ""
-		wrapMode: Text.WordWrap
-		opacity: 0.8
-		text: i18n("Only units that were actually running are paused, and only those "
-			+ "this widget itself paused are resumed. PackageKit, fwupd, and similar "
-			+ "update daemons are deliberately not offered here: they typically run as "
-			+ "system services, and automating them would require giving this widget "
-			+ "root access it does not otherwise need.")
-	}
+		QQC2.Label {
+			Kirigami.FormData.label: ""
+			wrapMode: Text.WordWrap
+			opacity: 0.8
+			Layout.fillWidth: true
+			text: i18n("Only units that were actually running are paused, and only those "
+				+ "this widget itself paused are resumed. PackageKit, fwupd, and similar "
+				+ "update daemons are deliberately not offered here: they typically run as "
+				+ "system services, and automating them would require giving this widget "
+				+ "root access it does not otherwise need.")
+		}
 
-	QQC2.Label {
-		Kirigami.FormData.isSection: true
-		text: i18n("Power profile")
-	}
+		QQC2.Label {
+			Kirigami.FormData.isSection: true
+			text: i18n("Power profile")
+		}
 
-	QQC2.CheckBox {
-		id: profileEnabledCheck
-		Kirigami.FormData.label: i18n("Max CPU performance while boosted:")
-		text: i18n("Switch to the \"performance\" power-profiles-daemon profile")
-	}
+		QQC2.CheckBox {
+			id: profileEnabledCheck
+			Kirigami.FormData.label: i18n("Max CPU performance while boosted:")
+			text: i18n("Switch to the \"performance\" power-profiles-daemon profile")
+			Layout.fillWidth: true
+		}
 
-	QQC2.Label {
-		Kirigami.FormData.label: ""
-		wrapMode: Text.WordWrap
-		opacity: 0.8
-		text: i18n("Uses power-profiles-daemon (powerprofilesctl), the same mechanism "
-			+ "System Settings' own Energy Saving page uses - no root needed. Your "
-			+ "previous profile is restored exactly when you turn BOOST off. If this "
-			+ "system has no \"performance\" profile available, this option has no "
-			+ "effect and is reported as unsupported in the widget's tooltip.")
-	}
+		QQC2.Label {
+			Kirigami.FormData.label: ""
+			wrapMode: Text.WordWrap
+			opacity: 0.8
+			Layout.fillWidth: true
+			text: i18n("Uses power-profiles-daemon (powerprofilesctl), the same mechanism "
+				+ "System Settings' own Energy Saving page uses - no root needed. Your "
+				+ "previous profile is restored exactly when you turn BOOST off. If this "
+				+ "system has no \"performance\" profile available, this option has no "
+				+ "effect and is reported as unsupported in the widget's tooltip.")
+		}
 
-	QQC2.Label {
-		Kirigami.FormData.isSection: true
-		text: i18n("Browser")
-	}
+		QQC2.Label {
+			Kirigami.FormData.isSection: true
+			text: i18n("Browser")
+		}
 
-	QQC2.CheckBox {
-		id: chromeEnabledCheck
-		Kirigami.FormData.label: i18n("Deprioritize browser while boosted:")
-		text: i18n("Lower CPU/IO priority for matching browser processes")
-	}
+		QQC2.CheckBox {
+			id: chromeEnabledCheck
+			Kirigami.FormData.label: i18n("Deprioritize browser while boosted:")
+			text: i18n("Lower CPU/IO priority for matching browser processes")
+			Layout.fillWidth: true
+		}
 
-	QQC2.TextField {
-		id: chromePatternField
-		Kirigami.FormData.label: i18n("Process pattern:")
-		placeholderText: "chrome|chromium"
-		enabled: chromeEnabledCheck.checked
-		Layout.fillWidth: true
-	}
+		QQC2.TextField {
+			id: chromePatternField
+			Kirigami.FormData.label: i18n("Process pattern:")
+			placeholderText: "chrome|chromium"
+			enabled: chromeEnabledCheck.checked
+			Layout.fillWidth: true
+		}
 
-	QQC2.SpinBox {
-		id: chromeNiceField
-		Kirigami.FormData.label: i18n("Nice value:")
-		from: 0
-		to: 19
-		stepSize: 1
-		enabled: chromeEnabledCheck.checked
-	}
+		QQC2.SpinBox {
+			id: chromeNiceField
+			Kirigami.FormData.label: i18n("Nice value:")
+			from: 0
+			to: 19
+			stepSize: 1
+			enabled: chromeEnabledCheck.checked
+		}
 
-	QQC2.Label {
-		Kirigami.FormData.label: ""
-		wrapMode: Text.WordWrap
-		opacity: 0.8
-		text: i18n("Matches process command lines against the pattern above (an "
-			+ "extended-regex alternation of names, e.g. \"chrome|chromium|brave\") "
-			+ "and lowers their CPU nice value and sets idle I/O class - no root "
-			+ "needed, since you can always deprioritize your own processes. "
-			+ "Reapplied every time you turn BOOST on, so new tabs/renderer "
-			+ "processes started afterward are not covered until the next toggle. "
-			+ "Also makes a one-shot attempt to push that browser's idle memory out "
-			+ "to swap/cache via cgroup v2, but only when the browser is confined to "
-			+ "its own cgroup (true for Flatpak browsers; not guaranteed for a "
-			+ "natively-installed one) - otherwise that part is silently skipped so "
-			+ "it never risks reclaiming memory from anything else.")
+		QQC2.Label {
+			Kirigami.FormData.label: ""
+			wrapMode: Text.WordWrap
+			opacity: 0.8
+			Layout.fillWidth: true
+			text: i18n("Matches process command lines against the pattern above (an "
+				+ "extended-regex alternation of names, e.g. \"chrome|chromium|brave\") "
+				+ "and lowers their CPU nice value and sets idle I/O class - no root "
+				+ "needed, since you can always deprioritize your own processes. "
+				+ "Reapplied every time you turn BOOST on, so new tabs/renderer "
+				+ "processes started afterward are not covered until the next toggle. "
+				+ "Also makes a one-shot attempt to push that browser's idle memory out "
+				+ "to swap/cache via cgroup v2, but only when the browser is confined to "
+				+ "its own cgroup (true for Flatpak browsers; not guaranteed for a "
+				+ "natively-installed one) - otherwise that part is silently skipped so "
+				+ "it never risks reclaiming memory from anything else.")
+		}
 	}
-}
 }
