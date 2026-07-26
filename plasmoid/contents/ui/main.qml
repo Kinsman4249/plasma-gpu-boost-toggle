@@ -35,7 +35,7 @@ PlasmoidItem {
 	// Bumped whenever this file (or its config pages) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.7"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.8"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts

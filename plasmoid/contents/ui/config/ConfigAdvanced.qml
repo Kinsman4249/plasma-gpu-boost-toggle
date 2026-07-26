@@ -8,8 +8,14 @@ import org.kde.kirigami as Kirigami
 // page from ConfigGeneral.qml since power limits + these two axes would
 // crowd a single form. See SystemController.qml for the logic these
 // settings drive.
-Kirigami.FormLayout {
-	id: page
+// Wrapped in a ScrollView: this page's content (four sections' worth of
+// checkboxes/fields/explanatory text) is taller than the config dialog's
+// fixed window height, and without a scroll container the bottom of the
+// page was simply unreachable - no scrollbar, no way to see or click it.
+QQC2.ScrollView {
+	id: root
+
+	contentWidth: availableWidth
 
 	property alias cfg_serviceIdlingEnabled: idlingEnabledCheck.checked
 	property alias cfg_idleBaloo: idleBalooCheck.checked
@@ -20,6 +26,10 @@ Kirigami.FormLayout {
 	property alias cfg_chromeIdlingEnabled: chromeEnabledCheck.checked
 	property alias cfg_chromeProcessPattern: chromePatternField.text
 	property alias cfg_chromeNiceValue: chromeNiceField.value
+
+Kirigami.FormLayout {
+	id: page
+	width: root.availableWidth
 
 	QQC2.Label {
 		Kirigami.FormData.isSection: true
@@ -139,4 +149,5 @@ Kirigami.FormLayout {
 			+ "natively-installed one) - otherwise that part is silently skipped so "
 			+ "it never risks reclaiming memory from anything else.")
 	}
+}
 }

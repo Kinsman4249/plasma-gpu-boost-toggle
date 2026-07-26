@@ -9,17 +9,27 @@ import org.kde.plasma.plasma5support as Plasma5Support
 // KConfigXT convention: a property named cfg_<entryName> is automatically
 // read from and written back to the matching <entry name="entryName"> in
 // contents/config/main.xml when the user opens/saves this page.
-Kirigami.FormLayout {
-	id: page
+// Wrapped in a ScrollView so this page behaves the same as
+// ConfigAdvanced.qml if its content ever grows past the config dialog's
+// fixed window height - see the comment there for the concrete symptom
+// this avoids (content cut off with no way to scroll to it).
+QQC2.ScrollView {
+	id: root
+
+	contentWidth: availableWidth
 
 	property alias cfg_defaultWatts: defaultWattsField.value
 	property alias cfg_boostWatts: boostWattsField.value
 	property alias cfg_debugLogging: debugLoggingCheck.checked
 
+Kirigami.FormLayout {
+	id: page
+	width: root.availableWidth
+
 	// Build/version stamp, only shown when debug logging is on, so it is
 	// easy to tell which build a bug report came from. Bump the date
 	// suffix (YYYY-MM-DD.N) whenever this plasmoid is changed.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.7"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.8"
 
 	// Unprivileged DataSource used only to read power.min_limit /
 	// power.default_limit / power.max_limit from nvidia-smi, both to
@@ -147,4 +157,5 @@ Kirigami.FormLayout {
 		text: page.versionStamp
 		opacity: 0.7
 	}
+}
 }

@@ -21,11 +21,12 @@
     </entry>
   </group>
   <group name="Advanced">
-    <!-- Both of these default to false so existing installs keep their
-         current behavior after an update; the Advanced config page is
-         where the user opts in. -->
+    <!-- All three axes default to on: each one degrades gracefully and
+         independently (see SystemController.qml / ChromeController.qml /
+         README "Partial support"), so there is no real downside to
+         boosting everything this system supports out of the box. -->
     <entry name="serviceIdlingEnabled" type="Bool">
-      <default>false</default>
+      <default>true</default>
       <label>Pause background services while boosted.</label>
     </entry>
     <entry name="idleBaloo" type="Bool">
@@ -45,11 +46,11 @@
       <label>Extra systemctl --user unit names to stop while boosted, comma or newline separated.</label>
     </entry>
     <entry name="powerProfileEnabled" type="Bool">
-      <default>false</default>
+      <default>true</default>
       <label>Switch to the performance power profile while boosted.</label>
     </entry>
     <entry name="chromeIdlingEnabled" type="Bool">
-      <default>false</default>
+      <default>true</default>
       <label>Deprioritize matching browser processes while boosted.</label>
     </entry>
     <entry name="chromeProcessPattern" type="String">
