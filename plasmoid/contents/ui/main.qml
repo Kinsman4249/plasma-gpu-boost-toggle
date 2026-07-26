@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
-import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.kirigami as Kirigami
 
@@ -21,7 +20,7 @@ PlasmoidItem {
 	// Bumped whenever this file (or its config page) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-25.2"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.1"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts
@@ -38,11 +37,11 @@ PlasmoidItem {
 
 	Plasmoid.icon: !configured ? "dialog-warning"
 		: busy ? "view-refresh"
-		: boosted ? "media-playback-start"
-		: "media-playback-pause"
+		: boosted ? Qt.resolvedUrl("icons/icon-on.svg")
+		: Qt.resolvedUrl("icons/icon-off.svg")
 
-	Plasmoid.toolTipMainText: i18n("GPU Boost Toggle")
-	Plasmoid.toolTipSubText: {
+	toolTipMainText: i18n("GPU Boost Toggle")
+	toolTipSubText: {
 		if (!configured) {
 			return i18n("Not configured. Right-click > Configure to set watt values.")
 		}
@@ -171,7 +170,7 @@ PlasmoidItem {
 		Layout.minimumWidth: Kirigami.Units.iconSizes.small
 		Layout.minimumHeight: Kirigami.Units.iconSizes.small
 
-		PlasmaCore.IconItem {
+		Kirigami.Icon {
 			anchors.fill: parent
 			source: Plasmoid.icon
 		}
