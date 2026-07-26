@@ -267,3 +267,9 @@ uninstall.sh                           interactive uninstaller (see Uninstall ab
   to characters valid in a systemd unit name before being used in any
   command, since it is interpolated into a plain command string rather
   than passed through `gpu-boost-helper.sh`'s stricter validation.
+- The "GPU power unsupported" icon rendering uses a composite approach:
+  the flame icon rendered as a mask (recoloured to panel text colour)
+  with the bolt icon drawn on top in its own fixed yellow. This is
+  necessary because Plasma's `isMask` property recolours an icon's alpha
+  channel with one flat colour - there is no way to mask part of a single
+  SVG and leave the rest in its own colours.
