@@ -12,6 +12,20 @@
     session - keeping the auth for a short grace period avoids prompting
     for a password on every single click, while still requiring admin
     credentials, not just any active session.
+
+    @HELPER_REAL_PATH@ below is substituted by install.sh with the
+    canonicalized (readlink -f) install path, not left as the literal
+    /usr/local/bin/gpu-boost-helper.sh. pkexec picks this policy's action
+    id (com.kinsman4249.gpuboost.toggle, and with it the no-password rule
+    below) only when this annotation exactly matches the *canonical* path
+    of the program it is about to run - and on ostree distros (Bazzite,
+    Silverblue) /usr/local is itself a symlink to /var/usrlocal, so the
+    canonical path is never the literal /usr/local/... one. Get this
+    wrong and pkexec silently falls back to the generic
+    org.freedesktop.policykit.exec action instead, which has no
+    no-password rule and so prompts for a password on every single
+    toggle - with no error, just a password prompt that looks identical
+    to a normal one.
   -->
   <action id="com.kinsman4249.gpuboost.toggle">
     <description>Change the NVIDIA GPU power limit and persistence mode</description>
@@ -22,7 +36,7 @@
       <allow_inactive>auth_admin_keep</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/gpu-boost-helper.sh</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">@HELPER_REAL_PATH@</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 </policyconfig>

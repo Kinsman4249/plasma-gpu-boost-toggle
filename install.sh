@@ -63,6 +63,7 @@ ICON_NAMES=(
 	com.kinsman4249.gpuboosttoggle
 	com.kinsman4249.gpuboosttoggle-on
 	com.kinsman4249.gpuboosttoggle-off
+	com.kinsman4249.gpuboosttoggle-bolt
 )
 
 fail() {
@@ -107,8 +108,22 @@ sudo install -o root -g root -m 0755 "$HELPER_SRC" "$HELPER_DEST" \
 	|| fail "failed to install $HELPER_DEST"
 
 step "Installing polkit policy to $POLICY_DEST (requires sudo)"
-sudo install -D -o root -g root -m 0644 "$POLICY_SRC" "$POLICY_DEST" \
+# pkexec only picks up this policy's action id (and the no-password rule
+# below) when the policy's exec.path annotation matches the *canonical*
+# path of $HELPER_DEST, not necessarily the literal path - on ostree
+# distros (Bazzite, Silverblue) /usr/local is itself a symlink to
+# /var/usrlocal, so readlink -f gives something different from
+# $HELPER_DEST. Get this wrong and pkexec silently falls back to the
+# generic org.freedesktop.policykit.exec action, which prompts for a
+# password every time with no visible error.
+HELPER_REAL_PATH="$(readlink -f "$HELPER_DEST")"
+POLICY_TMP="$(mktemp)"
+trap 'rm -f "$POLICY_TMP"' EXIT
+sed "s#@HELPER_REAL_PATH@#$HELPER_REAL_PATH#" "$POLICY_SRC" > "$POLICY_TMP"
+sudo install -D -o root -g root -m 0644 "$POLICY_TMP" "$POLICY_DEST" \
 	|| fail "failed to install $POLICY_DEST"
+rm -f "$POLICY_TMP"
+trap - EXIT
 
 step "Installing polkit no-password rule to $POLKIT_RULE_DEST (requires sudo)"
 # NOT "install -d": /etc/polkit-1/rules.d already exists, owned

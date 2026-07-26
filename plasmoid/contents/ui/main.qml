@@ -32,7 +32,7 @@ PlasmoidItem {
 	// Bumped whenever this file (or its config pages) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.4"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.5"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts
@@ -93,6 +93,16 @@ PlasmoidItem {
 
 	readonly property bool overallBusy: busy || systemController.busy
 
+	// nothingSupported always implies powerUnsupported (it's defined as
+	// powerUnsupported && ...), so BoostIcon's no-power rendering (bolt
+	// coloured, flame masked - see BoostIcon.qml) already covers every
+	// case the old dialog-error octagon used to. That octagon read as a
+	// permanent "broken" state even when the widget was working fine
+	// minus the one unsupported axis, so it's gone; powerUnsupported
+	// alone now decides this, regardless of whether other axes are
+	// enabled/supported.
+	readonly property bool showPowerUnsupportedIcon: configured && !overallBusy && powerUnsupported
+
 	// These two must be icon-theme names, not Qt.resolvedUrl() file
 	// paths: Kirigami.Icon (below) rendered a raw file:// source as a
 	// blank/invisible icon in the panel on this Plasma build, even though
@@ -101,7 +111,6 @@ PlasmoidItem {
 	// ~/.local/share/icons/hicolor/scalable/apps/ so the theme name
 	// resolves.
 	Plasmoid.icon: !configured ? "dialog-warning"
-		: nothingSupported ? "dialog-error"
 		: overallBusy ? "view-refresh"
 		: anyBoosted ? "com.kinsman4249.gpuboosttoggle-on"
 		: "com.kinsman4249.gpuboosttoggle-off"
@@ -346,11 +355,11 @@ PlasmoidItem {
 				anchors.centerIn: parent
 				spacing: Kirigami.Units.smallSpacing
 
-				Kirigami.Icon {
+				BoostIcon {
 					anchors.horizontalCenter: parent.horizontalCenter
 					width: Kirigami.Units.iconSizes.large
 					height: width
-					source: Plasmoid.icon
+					showNoPowerIcon: root.showPowerUnsupportedIcon
 				}
 
 				Text {
@@ -384,10 +393,10 @@ PlasmoidItem {
 		implicitWidth: Kirigami.Units.iconSizes.small
 		implicitHeight: Kirigami.Units.iconSizes.small
 
-		Kirigami.Icon {
+		BoostIcon {
 			anchors.fill: parent
-			source: Plasmoid.icon
 			active: compactRoot.containsMouse
+			showNoPowerIcon: root.showPowerUnsupportedIcon
 
 			// The OFF artwork is a flat dark-grey flame, which is nearly
 			// invisible on a dark panel. Drawing it as a mask makes Plasma
@@ -395,7 +404,7 @@ PlasmoidItem {
 			// on light and dark panels alike. The BOOST artwork is
 			// deliberately full-colour (and dialog-warning/view-refresh are
 			// already theme icons), so those must not be masked.
-			isMask: root.configured && !root.overallBusy && !root.anyBoosted
+			maskNormalIcon: root.configured && !root.overallBusy && !root.anyBoosted
 		}
 	}
 }
