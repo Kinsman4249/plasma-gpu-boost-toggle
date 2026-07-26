@@ -20,4 +20,33 @@
       <label>Print debug messages to the console.</label>
     </entry>
   </group>
+  <group name="Advanced">
+    <!-- Both of these default to false so existing installs keep their
+         current behavior after an update; the Advanced config page is
+         where the user opts in. -->
+    <entry name="serviceIdlingEnabled" type="Bool">
+      <default>false</default>
+      <label>Pause background services while boosted.</label>
+    </entry>
+    <entry name="idleBaloo" type="Bool">
+      <default>true</default>
+      <label>Suspend the Baloo file indexer while boosted.</label>
+    </entry>
+    <entry name="idleAkonadi" type="Bool">
+      <default>true</default>
+      <label>Stop Akonadi (PIM/mail sync) while boosted.</label>
+    </entry>
+    <entry name="idleKalarm" type="Bool">
+      <default>false</default>
+      <label>Stop the KAlarm daemon while boosted.</label>
+    </entry>
+    <entry name="customIdleUnits" type="String">
+      <default></default>
+      <label>Extra systemctl --user unit names to stop while boosted, comma or newline separated.</label>
+    </entry>
+    <entry name="powerProfileEnabled" type="Bool">
+      <default>false</default>
+      <label>Switch to the performance power profile while boosted.</label>
+    </entry>
+  </group>
 </kcfg>

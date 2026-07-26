@@ -100,6 +100,122 @@ restore_default() {
 restore_default
 
 # ---------------------------------------------------------------------------
+# Best-effort: undo the "Advanced" boost axes (services, power profile).
+#
+# Unlike restore_default() above, this script has no access to the QML
+# widget's own in-memory "was this actually running before boost" state,
+# since that never gets persisted (see README). So the heuristic here is
+# simpler and more conservative: if a given axis was enabled in settings
+# and currently looks paused/maxed, put it back to the ordinary default
+# (services running, "balanced" power profile) rather than trying to
+# reconstruct exactly what the user had before.
+# ---------------------------------------------------------------------------
+
+get_advanced_config() {
+	# Usage: get_advanced_config <key>. Same best-effort plain-text config
+	# read as restore_default() above, just parameterized over the key and
+	# pointed at the [Configuration][Advanced] section.
+	local key="$1"
+	local config_file="${XDG_CONFIG_HOME:-$HOME/.config}/plasma-org.kde.plasma.desktop-appletsrc"
+	[ -f "$config_file" ] || return 1
+	awk -v plugin="$PLUGIN_ID" -v key="$key" '
+		/^\[/ { section = $0 }
+		/^plugin=/ {
+			if ($0 == "plugin=" plugin) { target = section }
+		}
+		target != "" && section == target "[Configuration][Advanced]" && $0 ~ "^" key "=" {
+			sub("^" key "=", "")
+			print
+			exit
+		}
+	' "$config_file"
+}
+
+step "Checking background services"
+
+restore_services() {
+	if ! command -v systemctl >/dev/null 2>&1; then
+		echo "  systemctl not found, skipping."
+		return
+	fi
+
+	if [ "$(get_advanced_config serviceIdlingEnabled)" != "true" ]; then
+		echo "  Service idling was not enabled, nothing to restore."
+		return
+	fi
+
+	if [ "$(get_advanced_config idleBaloo)" = "true" ]; then
+		local baloo_bin=""
+		if command -v balooctl6 >/dev/null 2>&1; then
+			baloo_bin="balooctl6"
+		elif command -v balooctl >/dev/null 2>&1; then
+			baloo_bin="balooctl"
+		fi
+		if [ -n "$baloo_bin" ] && "$baloo_bin" status 2>/dev/null | grep -qi "not running\|suspended\|disabled"; then
+			echo "  Resuming Baloo file indexer..."
+			"$baloo_bin" resume || echo "  Warning: failed to resume Baloo."
+		fi
+	fi
+
+	if [ "$(get_advanced_config idleAkonadi)" = "true" ] && command -v akonadictl >/dev/null 2>&1; then
+		if ! akonadictl status >/dev/null 2>&1; then
+			echo "  Starting Akonadi..."
+			akonadictl start || echo "  Warning: failed to start Akonadi."
+		fi
+	fi
+
+	local units=""
+	[ "$(get_advanced_config idleKalarm)" = "true" ] && units="kalarm.service"
+	local custom_units
+	custom_units="$(get_advanced_config customIdleUnits)"
+	if [ -n "$custom_units" ]; then
+		units="$units $(echo "$custom_units" | tr ',\n' '  ')"
+	fi
+	units="$(echo "$units" | xargs)"
+	if [ -n "$units" ]; then
+		local unit
+		for unit in $units; do
+			if [ "$(systemctl --user is-active "$unit" 2>/dev/null)" != "active" ]; then
+				echo "  Starting $unit..."
+				systemctl --user start "$unit" 2>/dev/null \
+					|| echo "  Warning: failed to start $unit (it may not exist on this system)."
+			fi
+		done
+	fi
+}
+
+restore_services
+
+step "Checking power profile"
+
+restore_power_profile() {
+	if ! command -v powerprofilesctl >/dev/null 2>&1; then
+		echo "  powerprofilesctl not found, skipping."
+		return
+	fi
+
+	if [ "$(get_advanced_config powerProfileEnabled)" != "true" ]; then
+		echo "  Power profile switching was not enabled, nothing to restore."
+		return
+	fi
+
+	# "|| true": this is a plain assignment statement, not the condition of
+	# an if/while, so under "set -e" a nonzero exit here (e.g. the daemon
+	# not responding) would otherwise abort the whole script mid-uninstall,
+	# skipping plasmoid/root-file removal entirely.
+	local current
+	current="$(powerprofilesctl get 2>/dev/null || true)"
+	if [ "$current" = "performance" ]; then
+		echo "  Restoring power profile to balanced (was left at performance)..."
+		powerprofilesctl set balanced 2>/dev/null || echo "  Warning: failed to restore power profile."
+	else
+		echo "  Power profile is not at performance, nothing to restore."
+	fi
+}
+
+restore_power_profile
+
+# ---------------------------------------------------------------------------
 # Remove the plasmoid (user-level, no root needed)
 # ---------------------------------------------------------------------------
 
@@ -134,6 +250,6 @@ else
 fi
 
 step "Done"
-echo "The plasmoid's saved settings (watt values, debug flag) were left in"
-echo "place under your Plasma config directory. See README.md if you want"
-echo "to remove those too."
+echo "The plasmoid's saved settings (watt values, debug flag, service/power"
+echo "profile options) were left in place under your Plasma config directory."
+echo "See README.md if you want to remove those too."

@@ -9,4 +9,9 @@ ConfigModel {
 		icon: "com.kinsman4249.gpuboosttoggle"
 		source: "config/ConfigGeneral.qml"
 	}
+	ConfigCategory {
+		name: i18n("Advanced")
+		icon: "configure"
+		source: "config/ConfigAdvanced.qml"
+	}
 }

@@ -6,32 +6,44 @@ import org.kde.kirigami as Kirigami
 
 // GPU Boost Toggle
 //
-// A panel button that flips an NVIDIA GPU between two power-limit
-// profiles: OFF (default watts, persistence mode off) and BOOST (higher
-// watts, persistence mode on). It never assumes the last-clicked state is
-// the real state: it polls "nvidia-smi" on a timer and on load, so a
-// change made from a terminal is picked up too. Root-only work (actually
-// changing the power limit) is done through pkexec + a helper script, see
-// gpu-boost-helper.sh; this QML file never calls sudo/pkexec-protected
-// commands directly with hardcoded watt numbers.
+// A panel button that flips a "boost" state on and off across up to three
+// independent axes:
+//   - Power: an NVIDIA GPU's power-limit + persistence-mode profile,
+//     handled inline below via nvidia-smi/gpu-boost-helper.sh.
+//   - Services: pausing user-level background services (Baloo, Akonadi,
+//     etc.), handled by SystemController.qml.
+//   - Power profile: switching to the "performance" power-profiles-daemon
+//     profile, also handled by SystemController.qml.
+// Each axis is probed and toggled independently, so a laptop GPU that
+// rejects the power-limit change (common - see powerUnsupported below)
+// still gets the benefit of whichever other axes this system supports,
+// instead of the whole widget considering itself unsupported.
+//
+// It never assumes the last-clicked state is the real state: it polls
+// "nvidia-smi" on a timer and on load, so a change made from a terminal
+// is picked up too. Root-only work (actually changing the power limit) is
+// done through pkexec + a helper script, see gpu-boost-helper.sh; this
+// QML file never calls sudo/pkexec-protected commands directly with
+// hardcoded watt numbers. The services/power-profile axes never need
+// root at all - see SystemController.qml.
 PlasmoidItem {
 	id: root
 
-	// Bumped whenever this file (or its config page) changes in a way
+	// Bumped whenever this file (or its config pages) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.3"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.4"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts
 	readonly property bool debugLogging: Plasmoid.configuration.debugLogging
 	readonly property bool configured: defaultWatts > 0 && boostWatts > 0
 
-	// Reflects the GPU's actual current state, as last learned from
+	// Reflects the GPU's actual current power state, as last learned from
 	// polling. This is intentionally not saved to config: the widget must
 	// always start at OFF after a reboot (the GPU itself resets to its
 	// default power limit and persistence-off, so a fresh poll will agree).
-	property bool boosted: false
+	property bool powerBoosted: false
 	property bool busy: false
 	property bool pollFailed: false
 
@@ -40,7 +52,46 @@ PlasmoidItem {
 	// even when the driver rejects the change outright - common on
 	// laptop GPUs). Cleared the moment a toggle attempt exits cleanly, so
 	// it never sticks around once the GPU does accept a change.
-	property bool unsupported: false
+	property bool powerUnsupported: false
+
+	// Owns the services and power-profile axes. Its inputs are wired
+	// directly from this widget's config; its outputs (servicesIdled,
+	// powerProfileMaxed, powerProfileUnsupported, busy) are read below to
+	// build the combined boosted/tooltip state.
+	property SystemController systemController: SystemController {
+		idlingEnabled: Plasmoid.configuration.serviceIdlingEnabled
+		idleBaloo: Plasmoid.configuration.idleBaloo
+		idleAkonadi: Plasmoid.configuration.idleAkonadi
+		idleKalarm: Plasmoid.configuration.idleKalarm
+		customIdleUnits: Plasmoid.configuration.customIdleUnits
+		profileEnabled: Plasmoid.configuration.powerProfileEnabled
+		debugLogging: root.debugLogging
+		onLogMessage: (msg) => root.log(msg)
+	}
+
+	// True the moment ANY enabled axis is currently boosted/idled/maxed -
+	// drives the on/off icon and isMask.
+	readonly property bool anyBoosted: powerBoosted || systemController.servicesIdled || systemController.powerProfileMaxed
+
+	// True only once every ENABLED axis that also turns out to be
+	// supported on this system is actually in its boosted state. An axis
+	// that is disabled in settings, or unsupported on this hardware,
+	// doesn't hold this back - that is the whole point of "partial mode".
+	readonly property bool fullyBoosted:
+		(powerUnsupported || powerBoosted)
+		&& (!systemController.idlingEnabled || systemController.servicesIdled)
+		&& (systemController.powerProfileUnsupported || !systemController.profileEnabled || systemController.powerProfileMaxed)
+
+	// True only when literally nothing enabled is supported here - this
+	// is the "the whole widget is useless on this system" case, distinct
+	// from powerUnsupported alone (which today's partial mode treats as
+	// just one axis being unavailable).
+	readonly property bool nothingSupported:
+		powerUnsupported
+		&& !systemController.idlingEnabled
+		&& (systemController.powerProfileUnsupported || !systemController.profileEnabled)
+
+	readonly property bool overallBusy: busy || systemController.busy
 
 	// These two must be icon-theme names, not Qt.resolvedUrl() file
 	// paths: Kirigami.Icon (below) rendered a raw file:// source as a
@@ -50,9 +101,9 @@ PlasmoidItem {
 	// ~/.local/share/icons/hicolor/scalable/apps/ so the theme name
 	// resolves.
 	Plasmoid.icon: !configured ? "dialog-warning"
-		: unsupported ? "dialog-error"
-		: busy ? "view-refresh"
-		: boosted ? "com.kinsman4249.gpuboosttoggle-on"
+		: nothingSupported ? "dialog-error"
+		: overallBusy ? "view-refresh"
+		: anyBoosted ? "com.kinsman4249.gpuboosttoggle-on"
 		: "com.kinsman4249.gpuboosttoggle-off"
 
 	toolTipMainText: i18n("GPU Boost Toggle")
@@ -60,18 +111,33 @@ PlasmoidItem {
 		if (!configured) {
 			return i18n("Not configured. Right-click > Configure to set watt values.")
 		}
-		if (unsupported) {
-			return i18n("This GPU rejected the power limit change. It may not support this at all (common on laptop GPUs).")
+		if (nothingSupported) {
+			return i18n("This system doesn't support any of the configured boost options.")
 		}
 		if (pollFailed) {
 			return i18n("Could not read GPU state. Is nvidia-smi installed?")
 		}
-		if (busy) {
+		if (overallBusy) {
 			return i18n("Applying change...")
 		}
-		return boosted
-			? i18n("BOOST active (%1 W)", boostWatts)
-			: i18n("OFF (%1 W)", defaultWatts)
+		const lines = []
+		if (anyBoosted) {
+			lines.push(fullyBoosted ? i18n("BOOST") : i18n("BOOST (partial - see below)"))
+		} else {
+			lines.push(i18n("OFF"))
+		}
+		lines.push(powerUnsupported
+			? i18n("Power: unsupported on this GPU")
+			: (powerBoosted ? i18n("Power: BOOST (%1 W)", boostWatts) : i18n("Power: OFF (%1 W)", defaultWatts)))
+		if (systemController.idlingEnabled) {
+			lines.push(systemController.servicesIdled ? i18n("Services: idled") : i18n("Services: normal"))
+		}
+		if (systemController.profileEnabled) {
+			lines.push(systemController.powerProfileUnsupported
+				? i18n("Power profile: unsupported")
+				: (systemController.powerProfileMaxed ? i18n("Power profile: performance") : i18n("Power profile: normal")))
+		}
+		return lines.join("\n")
 	}
 
 	function log(msg) {
@@ -167,19 +233,26 @@ PlasmoidItem {
 			root.log("not configured yet, auto-querying nvidia-smi for suggested watt values")
 			autoConfigure.exec("nvidia-smi --query-gpu=power.min_limit,power.default_limit,power.max_limit --format=csv,noheader")
 		}
+		// Cheap, one-shot capability check so the power-profile axis knows
+		// whether it's supported before the user ever opens settings -
+		// never repeated on the polling timer.
+		systemController.probePowerProfile()
 	}
 
 	function toggle() {
-		if (!configured || busy) {
+		if (!configured || overallBusy) {
 			return
 		}
+		const goingUp = !anyBoosted
 		busy = true
-		if (boosted) {
-			root.log("requesting OFF (" + defaultWatts + " W)")
-			executable.exec("pkexec /usr/local/bin/gpu-boost-helper.sh off " + defaultWatts)
-		} else {
+		if (goingUp) {
 			root.log("requesting BOOST (" + boostWatts + " W)")
 			executable.exec("pkexec /usr/local/bin/gpu-boost-helper.sh on " + boostWatts)
+			systemController.activate()
+		} else {
+			root.log("requesting OFF (" + defaultWatts + " W)")
+			executable.exec("pkexec /usr/local/bin/gpu-boost-helper.sh off " + defaultWatts)
+			systemController.deactivate()
 		}
 	}
 
@@ -195,7 +268,7 @@ PlasmoidItem {
 		// the power limit (see gpu-boost-helper.sh); other nonzero codes
 		// are ordinary failures (cancelled polkit prompt, bad watts,
 		// nvidia-smi missing, etc), not this GPU's own capability.
-		unsupported = (exitCode === 3)
+		powerUnsupported = (exitCode === 3)
 		if (exitCode !== 0) {
 			root.log("toggle command failed (exit " + exitCode + "): " + stderr)
 		}
@@ -229,11 +302,11 @@ PlasmoidItem {
 		// Treat "close to the configured boost wattage, with persistence
 		// on" as boosted. nvidia-smi reports watts with decimals while the
 		// configured value is an integer, so allow a small tolerance.
-		root.boosted = configured
+		root.powerBoosted = configured
 			&& persistenceOn
 			&& Math.abs(currentWatts - boostWatts) < 1.0
 		root.log("status: " + currentWatts + " W, persistence " + (persistenceOn ? "on" : "off")
-			+ " -> boosted=" + root.boosted)
+			+ " -> powerBoosted=" + root.powerBoosted)
 	}
 
 	Timer {
@@ -322,7 +395,7 @@ PlasmoidItem {
 			// on light and dark panels alike. The BOOST artwork is
 			// deliberately full-colour (and dialog-warning/view-refresh are
 			// already theme icons), so those must not be masked.
-			isMask: root.configured && !root.busy && !root.boosted
+			isMask: root.configured && !root.overallBusy && !root.anyBoosted
 		}
 	}
 }
