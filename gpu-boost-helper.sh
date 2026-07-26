@@ -88,6 +88,29 @@ case "$mode" in
 		nvidia-smi -pl "$watts" && nvidia-smi -pm 0
 		;;
 	status)
-		nvidia-smi --query-gpu=power.limit,persistence_mode --format=csv,noheader
+		# enforced.power.limit, not power.limit: power.limit reports "[N/A]"
+		# on some cards until nvidia-smi -pl has run at least once since
+		# boot, which made this print a useless value on a freshly booted
+		# machine.
+		nvidia-smi --query-gpu=enforced.power.limit,persistence_mode --format=csv,noheader
 		;;
 esac
+
+if [ "$mode" = "on" ] || [ "$mode" = "off" ]; then
+	# "nvidia-smi -pl" exits 0 even when the driver refuses the change
+	# outright (printed as "Changing power management limit is not
+	# supported for GPU: ...", then "Treating as warning and moving on.").
+	# This is common on laptop/mobile GPUs, where the OEM's own firmware
+	# owns power management instead of exposing it through nvidia-smi. So
+	# exit code alone cannot tell the caller whether this actually worked;
+	# re-read the real enforced limit and compare against what was asked
+	# for.
+	actual="$(nvidia-smi --query-gpu=enforced.power.limit --format=csv,noheader,nounits | tr -d ' ')"
+	if ! awk -v a="$actual" -v w="$watts" 'BEGIN { exit !(a >= w - 1 && a <= w + 1) }'; then
+		echo "Error: GPU did not accept power limit ${watts}W (still at ${actual}W)." >&2
+		echo "This GPU/driver may not support changing the power limit at all -" >&2
+		echo "common on laptop GPUs, where the OEM's own firmware (not nvidia-smi)" >&2
+		echo "controls power management." >&2
+		exit 3
+	fi
+fi
