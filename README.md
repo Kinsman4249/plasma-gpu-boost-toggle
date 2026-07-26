@@ -40,11 +40,24 @@ desktop.
 - An NVIDIA GPU with `nvidia-smi` installed and working
 - `pkexec` / polkit (installed by default on virtually all Plasma desktops)
 
+## Quick install
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kinsman4249/plasma-gpu-boost-toggle/main/quick-install.sh)"
+```
+
+This just clones the repo into a temp directory and runs the same
+`install.sh` described below - it does not skip the review step for you.
+If you'd rather read the scripts first (recommended, since one of them
+places root-owned files), use the manual steps instead.
+
 ## Manual install
 
 Nothing is installed automatically. Review the scripts, then run:
 
 ```sh
+git clone https://github.com/Kinsman4249/plasma-gpu-boost-toggle.git
+cd plasma-gpu-boost-toggle
 ./install.sh
 ```
 
