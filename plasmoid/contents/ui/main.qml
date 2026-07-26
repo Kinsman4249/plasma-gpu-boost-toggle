@@ -32,7 +32,7 @@ PlasmoidItem {
 	// Bumped whenever this file (or its config pages) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.5"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.6"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts
@@ -93,15 +93,16 @@ PlasmoidItem {
 
 	readonly property bool overallBusy: busy || systemController.busy
 
-	// nothingSupported always implies powerUnsupported (it's defined as
-	// powerUnsupported && ...), so BoostIcon's no-power rendering (bolt
-	// coloured, flame masked - see BoostIcon.qml) already covers every
-	// case the old dialog-error octagon used to. That octagon read as a
-	// permanent "broken" state even when the widget was working fine
-	// minus the one unsupported axis, so it's gone; powerUnsupported
-	// alone now decides this, regardless of whether other axes are
-	// enabled/supported.
-	readonly property bool showPowerUnsupportedIcon: configured && !overallBusy && powerUnsupported
+	// Bolt-coloured/flame-masked rendering (see BoostIcon.qml) only when
+	// something is ACTUALLY boosted via a non-GPU axis while the GPU axis
+	// itself can't be: gated on anyBoosted, not just powerUnsupported.
+	// powerUnsupported alone stays true forever on hardware that rejects
+	// the wattage change (see handleResult below), so gating on it alone
+	// made this icon permanent regardless of on/off - toggling off looked
+	// broken because the icon never changed. When nothing is boosted,
+	// this is identical to plain "off" (maskNormalIcon below already
+	// covers it) - there is nothing partial left to call out.
+	readonly property bool showPartialBoostIcon: configured && !overallBusy && anyBoosted && powerUnsupported
 
 	// These two must be icon-theme names, not Qt.resolvedUrl() file
 	// paths: Kirigami.Icon (below) rendered a raw file:// source as a
@@ -359,7 +360,7 @@ PlasmoidItem {
 					anchors.horizontalCenter: parent.horizontalCenter
 					width: Kirigami.Units.iconSizes.large
 					height: width
-					showNoPowerIcon: root.showPowerUnsupportedIcon
+					showNoPowerIcon: root.showPartialBoostIcon
 				}
 
 				Text {
@@ -396,7 +397,7 @@ PlasmoidItem {
 		BoostIcon {
 			anchors.fill: parent
 			active: compactRoot.containsMouse
-			showNoPowerIcon: root.showPowerUnsupportedIcon
+			showNoPowerIcon: root.showPartialBoostIcon
 
 			// The OFF artwork is a flat dark-grey flame, which is nearly
 			// invisible on a dark panel. Drawing it as a mask makes Plasma
