@@ -19,11 +19,13 @@ Kirigami.FormLayout {
 	// Build/version stamp, only shown when debug logging is on, so it is
 	// easy to tell which build a bug report came from. Bump the date
 	// suffix (YYYY-MM-DD.N) whenever this plasmoid is changed.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-25.1"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-25.2"
 
-	// Unprivileged DataSource used only to read power.limit / power.max_limit
-	// from nvidia-smi so we can suggest starting values. This never touches
-	// root and is separate from the pkexec calls the main widget makes.
+	// Unprivileged DataSource used only to read power.min_limit / power.limit
+	// / power.max_limit from nvidia-smi, both to suggest starting values and
+	// to size the SpinBox ranges below to what THIS card actually supports.
+	// This never touches root and is separate from the pkexec calls the main
+	// widget makes.
 	Plasma5Support.DataSource {
 		id: queryExecutable
 		engine: "executable"
@@ -36,25 +38,34 @@ Kirigami.FormLayout {
 				queryStatusLabel.text = i18n("Could not query nvidia-smi. Enter values manually.")
 				return
 			}
-			// Expected line shape: "150.00 W, 350.00 W"
+			// Expected line shape: "100.00 W, 150.00 W, 350.00 W"
 			const parts = stdout.split(",")
-			if (parts.length < 2) {
+			if (parts.length < 3) {
 				queryStatusLabel.text = i18n("Unexpected nvidia-smi output. Enter values manually.")
 				return
 			}
-			const current = parseFloat(parts[0])
-			const max = parseFloat(parts[1])
-			if (isNaN(current) || isNaN(max)) {
+			const min = parseFloat(parts[0])
+			const current = parseFloat(parts[1])
+			const max = parseFloat(parts[2])
+			if (isNaN(min) || isNaN(current) || isNaN(max)) {
 				queryStatusLabel.text = i18n("Unexpected nvidia-smi output. Enter values manually.")
 				return
 			}
+			// Size the fields to this GPU's real enforceable range instead
+			// of a guessed-at band, so a card whose envelope falls outside
+			// some fixed default isn't clamped to the wrong values.
+			defaultWattsField.from = Math.floor(min)
+			defaultWattsField.to = Math.ceil(max)
+			boostWattsField.from = Math.floor(min)
+			boostWattsField.to = Math.ceil(max)
 			if (defaultWattsField.value === 0) {
 				defaultWattsField.value = Math.round(current)
 			}
 			if (boostWattsField.value === 0) {
 				boostWattsField.value = Math.round(max)
 			}
-			queryStatusLabel.text = i18n("Suggested values filled in below. Review before saving.")
+			queryStatusLabel.text = i18n("Suggested values filled in below (range: %1-%2 W for this GPU). Review before saving.",
+				Math.floor(min), Math.ceil(max))
 		}
 		function exec(cmd) {
 			connectSource(cmd)
@@ -63,7 +74,7 @@ Kirigami.FormLayout {
 
 	function queryGpu() {
 		queryStatusLabel.text = i18n("Querying nvidia-smi...")
-		queryExecutable.exec("nvidia-smi --query-gpu=power.limit,power.max_limit --format=csv,noheader")
+		queryExecutable.exec("nvidia-smi --query-gpu=power.min_limit,power.limit,power.max_limit --format=csv,noheader")
 	}
 
 	// On first open, if nothing has been configured yet, query automatically.
@@ -78,6 +89,9 @@ Kirigami.FormLayout {
 		text: i18n("Power limits")
 	}
 
+	// from/to below are only a fallback shown before the GPU query below
+	// completes (or if it fails); queryGpu() replaces them with this card's
+	// real power.min_limit/power.max_limit as soon as it succeeds.
 	QQC2.SpinBox {
 		id: defaultWattsField
 		Kirigami.FormData.label: i18n("Default (OFF) watts:")

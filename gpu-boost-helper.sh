@@ -10,7 +10,10 @@
 #
 # No wattage numbers are hardcoded here. The caller (the plasmoid, using
 # its own user-configured values) always passes the target wattage as an
-# argument.
+# argument, and this script validates it against THIS GPU's own reported
+# power.min_limit/power.max_limit (from nvidia-smi), not a fixed band, so
+# a card whose real envelope falls outside some arbitrary guess is still
+# handled correctly.
 #
 # Usage:
 #   gpu-boost-helper.sh on <watts>      set persistence mode on, power limit <watts>
@@ -32,29 +35,8 @@ fi
 mode="$1"
 
 case "$mode" in
-	on|off)
-		if [ "$#" -ne 2 ]; then
-			usage
-		fi
-		watts="$2"
-		# Strict check: digits only. No sign, no decimal point, no
-		# leading/trailing junk that a looser regex might let through.
-		if ! [[ "$watts" =~ ^[0-9]+$ ]]; then
-			echo "Error: watts must be a plain positive integer, got '$watts'" >&2
-			exit 1
-		fi
-		# Sane power-envelope bound. Reject anything outside it rather
-		# than trusting nvidia-smi to reject it for us.
-		if [ "$watts" -lt 50 ] || [ "$watts" -gt 500 ]; then
-			echo "Error: watts must be between 50 and 500, got '$watts'" >&2
-			exit 1
-		fi
-		;;
-	status)
-		if [ "$#" -ne 1 ]; then
-			usage
-		fi
-		;;
+	on|off) [ "$#" -eq 2 ] || usage ;;
+	status) [ "$#" -eq 1 ] || usage ;;
 	*)
 		echo "Error: mode must be one of: on, off, status" >&2
 		usage
@@ -67,6 +49,35 @@ esac
 if ! command -v nvidia-smi >/dev/null 2>&1; then
 	echo "Error: nvidia-smi not found in PATH" >&2
 	exit 1
+fi
+
+if [ "$mode" = "on" ] || [ "$mode" = "off" ]; then
+	watts="$2"
+	# Strict check: digits only. No sign, no decimal point, no
+	# leading/trailing junk that a looser regex might let through.
+	if ! [[ "$watts" =~ ^[0-9]+$ ]]; then
+		echo "Error: watts must be a plain positive integer, got '$watts'" >&2
+		exit 1
+	fi
+
+	# Ask THIS card what it actually supports rather than trusting a
+	# guessed-at band. power.min_limit/power.max_limit reflect the real,
+	# per-GPU enforceable range (which varies a lot across models), so
+	# that is the only source of truth for what "in range" means here.
+	limits="$(nvidia-smi --query-gpu=power.min_limit,power.max_limit --format=csv,noheader,nounits | head -n1)"
+	min_watts="$(echo "$limits" | cut -d',' -f1 | tr -d ' ')"
+	max_watts="$(echo "$limits" | cut -d',' -f2 | tr -d ' ')"
+	if ! [[ "$min_watts" =~ ^[0-9]+(\.[0-9]+)?$ ]] || ! [[ "$max_watts" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+		echo "Error: could not read power.min_limit/power.max_limit from nvidia-smi" >&2
+		exit 1
+	fi
+	# Compare with awk since limits can be fractional (e.g. "50.00") while
+	# watts is a plain integer.
+	if ! awk -v w="$watts" -v lo="$min_watts" -v hi="$max_watts" \
+		'BEGIN { exit !(w >= lo && w <= hi) }'; then
+		echo "Error: watts must be between ${min_watts} and ${max_watts} for this GPU, got '$watts'" >&2
+		exit 1
+	fi
 fi
 
 case "$mode" in
