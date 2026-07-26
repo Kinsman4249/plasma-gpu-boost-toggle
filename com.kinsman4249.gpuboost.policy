@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Kinsman4249</vendor>
+  <vendor_url>https://github.com/Kinsman4249/plasma-gpu-boost-toggle</vendor_url>
+
+  <!--
+    Authorizes running gpu-boost-helper.sh as root via pkexec.
+    auth_admin_keep (rather than auth_admin) is used because this is a
+    manual, user-initiated toggle that may be clicked more than once in a
+    session - keeping the auth for a short grace period avoids prompting
+    for a password on every single click, while still requiring admin
+    credentials, not just any active session.
+  -->
+  <action id="com.kinsman4249.gpuboost.toggle">
+    <description>Change the NVIDIA GPU power limit and persistence mode</description>
+    <message>Authentication is required to change the NVIDIA GPU power limit</message>
+    <icon_name>utilities-system-monitor</icon_name>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/gpu-boost-helper.sh</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>

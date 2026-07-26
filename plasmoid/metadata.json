@@ -1,0 +1,19 @@
+{
+	"KPackageStructure": "Plasma/Applet",
+	"KPlugin": {
+		"Authors": [
+			{
+				"Name": "Kinsman4249"
+			}
+		],
+		"Category": "System Information",
+		"Description": "Toggle an NVIDIA GPU between a default power limit and a boosted power limit from the panel. Requires nvidia-smi.",
+		"Icon": "utilities-system-monitor",
+		"Id": "com.kinsman4249.gpuboosttoggle",
+		"License": "GPL-3.0-or-later",
+		"Name": "GPU Boost Toggle",
+		"Version": "1.0.0",
+		"Website": "https://github.com/Kinsman4249/plasma-gpu-boost-toggle"
+	},
+	"X-Plasma-API-Minimum-Version": "6.0"
+}

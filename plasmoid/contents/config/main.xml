@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile arg="true"/>
+  <group name="General">
+    <!-- 0 means "not configured yet". The config UI queries nvidia-smi to
+         suggest real values the first time the user opens settings. -->
+    <entry name="defaultWatts" type="Int">
+      <default>0</default>
+      <label>Power limit in watts used for the OFF state.</label>
+    </entry>
+    <entry name="boostWatts" type="Int">
+      <default>0</default>
+      <label>Power limit in watts used for the BOOST state.</label>
+    </entry>
+    <entry name="debugLogging" type="Bool">
+      <default>false</default>
+      <label>Print debug messages to the console.</label>
+    </entry>
+  </group>
+</kcfg>
