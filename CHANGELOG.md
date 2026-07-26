@@ -1,8 +1,8 @@
 # Changelog
 
-## v1.2.0
+## v1.2.1
 
-Added browser deprioritization: the widget can now lower the nice value and I/O class of Chrome-like processes to reduce their CPU priority during BOOST mode. This helps free CPU cycles for GPU-accelerated workloads. The feature is optional and controlled via the Advanced settings (chromeIdlingEnabled, chromeProcessPattern, chromeNiceValue). When enabled, the widget attempts to reclaim idle browser memory via cgroup v2's memory.reclaim interface (when the browser is confined to its own cgroup, as with Flatpak). The chrome-boost-helper.sh script handles priority adjustments and memory reclaim attempts. The plasmoid's main.qml now includes a ChromeController component that integrates with the existing multi-axis architecture. The uninstall script has been updated to restore browser priority settings when returning to OFF mode.
+Changed default values for all three advanced axes (serviceIdlingEnabled, powerProfileEnabled, chromeIdlingEnabled) from false to true. Each axis degrades gracefully and independently, so enabling them by default provides maximum boost without risk. The ConfigAdvanced.qml and ConfigGeneral.qml pages have been wrapped in QQC2.ScrollView containers to ensure content remains accessible when the config dialog window is smaller than the content height (previously, overflow content was unreachable without a scrollbar). The version stamp has been bumped to 2026-07-26.8 in main.qml and ConfigGeneral.qml.
 
 ## v1.1.1
 
