@@ -35,6 +35,16 @@ every Plasma desktop. The services and power-profile axes are optional
 and each degrade gracefully if their underlying tool
 (`balooctl`/`balooctl6`, `akonadictl`, `powerprofilesctl`) isn't present.
 
+## Ostree distro support (Bazzite, Silverblue)
+
+On ostree-based systems (Bazzite, Silverblue, etc.), `/usr/local` is a
+symlink to `/var/usrlocal`. The polkit policy file uses a placeholder
+`@HELPER_REAL_PATH@` that `install.sh` replaces with the canonical path
+(`readlink -f`) of the helper script. This ensures `pkexec` matches the
+action id correctly and the no-password rule applies - without it,
+`pkexec` silently falls back to the generic policy and prompts for a
+password on every toggle.
+
 ## How it works
 
 - The widget polls `nvidia-smi` every few seconds (and on load) to show
@@ -186,7 +196,7 @@ axis:
 - **Boost watts** - power limit used for the BOOST state.
 - **Debug logging** - off by default. When on, the widget prints debug
   messages to the console only (nothing is written to disk). A build
-  stamp (e.g. `gpu-boost-toggle 2026-07-26.4`) is shown on the settings
+  stamp (e.g. `gpu-boost-toggle 2026-07-26.6`) is shown on the settings
   page whenever debug logging is enabled, so you can tell which build a
   bug report came from.
 
