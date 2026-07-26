@@ -16,6 +16,7 @@ set -euo pipefail
 PLUGIN_ID="com.kinsman4249.gpuboosttoggle"
 HELPER_DEST="/usr/local/bin/gpu-boost-helper.sh"
 POLICY_DEST="/usr/share/polkit-1/actions/com.kinsman4249.gpuboost.policy"
+CHROME_HELPER_DEST="$HOME/.local/share/plasma-gpu-boost-toggle/chrome-boost-helper.sh"
 
 fail() {
 	echo "Error: $1" >&2
@@ -215,6 +216,32 @@ restore_power_profile() {
 
 restore_power_profile
 
+step "Checking browser priority"
+
+restore_chrome() {
+	if [ "$(get_advanced_config chromeIdlingEnabled)" != "true" ]; then
+		echo "  Browser deprioritizing was not enabled, nothing to restore."
+		return
+	fi
+	if [ ! -x "$CHROME_HELPER_DEST" ]; then
+		echo "  Chrome helper not installed, skipping."
+		return
+	fi
+
+	local pattern
+	pattern="$(get_advanced_config chromeProcessPattern)"
+	if [ -z "$pattern" ]; then
+		echo "  No saved process pattern, skipping."
+		return
+	fi
+
+	echo "  Restoring default nice/IO priority for processes matching '$pattern'..."
+	"$CHROME_HELPER_DEST" off "$pattern" 2>/dev/null \
+		|| echo "  Warning: failed to restore browser priority."
+}
+
+restore_chrome
+
 # ---------------------------------------------------------------------------
 # Remove the plasmoid (user-level, no root needed)
 # ---------------------------------------------------------------------------
@@ -245,6 +272,13 @@ fi
 step "Removing polkit policy $POLICY_DEST (requires sudo)"
 if [ -e "$POLICY_DEST" ]; then
 	sudo rm -f "$POLICY_DEST" || fail "failed to remove $POLICY_DEST"
+else
+	echo "  Not present, skipping."
+fi
+
+step "Removing browser-deprioritize helper $CHROME_HELPER_DEST"
+if [ -e "$CHROME_HELPER_DEST" ]; then
+	rm -f "$CHROME_HELPER_DEST"
 else
 	echo "  Not present, skipping."
 fi

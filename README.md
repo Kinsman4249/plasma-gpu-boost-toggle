@@ -64,6 +64,13 @@ password on every toggle.
   `balooctl`/`akonadictl`/`systemctl --user` only ever touch your own
   session, and `power-profiles-daemon` authorizes the active local
   session via polkit without a password prompt.
+- The browser axis doesn't need root either: it lowers the nice value
+  and I/O class of your own matching processes (always allowed for
+  processes you own), and makes a one-shot attempt to push that
+  browser's idle memory to swap/cache via cgroup v2's `memory.reclaim`
+  (writable by you on your own systemd-delegated cgroup). See "Security
+  notes" below for the safety check that keeps this from ever touching a
+  cgroup shared with anything else.
 - The widget always starts **OFF** on first install and after every
   reboot. This is by design: state is intentionally not persisted across
   reboots, since the GPU itself resets to its default power limit and
@@ -84,6 +91,12 @@ that rather than treating any one failure as fatal:
 - If `powerprofilesctl` isn't installed, or this system has no
   `performance` profile to switch to, the power-profile axis reports
   itself unsupported the same way.
+- If `pgrep` isn't available, the browser axis reports itself
+  unsupported the same way. Its memory-reclaim half degrades further and
+  more quietly: it only fires when your browser is confined to its own
+  cgroup (true for Flatpak browsers; not guaranteed for a natively
+  installed one), and silently does nothing otherwise - the deprioritize
+  half (nice/ionice) still applies either way.
 - The icon only shows a hard error (nothing works at all) when literally
   every enabled axis is unsupported; otherwise it shows boosted/not
   boosted, with the per-axis breakdown in the tooltip.
@@ -114,8 +127,10 @@ similar) for that axis and this widget for power/services/power-profile.
 - `pkexec` / polkit (installed by default on virtually all Plasma desktops)
 - Optional, only if you turn on the matching Advanced setting:
   `balooctl6`/`balooctl` and/or `akonadictl` (for the services axis),
-  `powerprofilesctl` (for the power-profile axis). Each degrades to
-  "unsupported" gracefully if missing.
+  `powerprofilesctl` (for the power-profile axis), `pgrep`/`renice`/
+  `ionice` (for the browser axis - present by default on virtually every
+  distro via `procps`/`util-linux`). Each degrades to "unsupported"
+  gracefully if missing.
 
 ## Quick install
 
@@ -143,6 +158,11 @@ root-owned file it places:
 
 1. `gpu-boost-helper.sh` -> `/usr/local/bin/gpu-boost-helper.sh` (root:root, 0755)
 2. `com.kinsman4249.gpuboost.policy` -> `/usr/share/polkit-1/actions/com.kinsman4249.gpuboost.policy` (root:root, 0644)
+
+It also installs `chrome-boost-helper.sh` (the browser axis, no root
+needed for this one) to
+`~/.local/share/plasma-gpu-boost-toggle/chrome-boost-helper.sh`, without
+a password prompt.
 
 It then installs the plasmoid itself for your user account with:
 
@@ -176,9 +196,12 @@ This reverses `install.sh` exactly:
   support" above for why uninstall can't do the same thing).
 - If the power-profile axis was ever enabled and the profile is currently
   `performance`, restores it to `balanced`.
+- If the browser axis was ever enabled, restores default nice/IO
+  priority for processes matching the saved pattern.
 - Removes the plasmoid with `kpackagetool6 -t Plasma/Applet -r`.
 - Removes `/usr/local/bin/gpu-boost-helper.sh`.
 - Removes `/usr/share/polkit-1/actions/com.kinsman4249.gpuboost.policy`.
+- Removes `~/.local/share/plasma-gpu-boost-toggle/chrome-boost-helper.sh`.
 
 `uninstall.sh` does **not** delete the widget's saved settings (watt
 values, debug logging flag, Advanced options). Those live in your own
@@ -216,6 +239,17 @@ The **Advanced** page sets the two optional axes, both off by default:
 - **Max CPU performance while boosted** - switches to the `performance`
   `power-profiles-daemon` profile and restores your previous profile
   (whatever it was, not a hardcoded guess) when you turn BOOST off.
+- **Deprioritize browser while boosted** - lowers the nice value and I/O
+  class of processes matching **Process pattern** (an extended-regex
+  alternation, default `chrome|chromium`; add `|brave`, `|vivaldi`, etc.
+  for other Chromium-based browsers, or replace it entirely for Firefox).
+  **Nice value** (0-19, default 15) controls how strongly it's
+  deprioritized. Applied once, at the moment you turn BOOST on, to every
+  matching process that exists right then; new tabs/renderer processes
+  the browser spawns afterward aren't covered until the next toggle.
+  Also makes a one-shot attempt to push that browser's idle memory to
+  swap/cache, but only when it can verify the browser is confined to its
+  own cgroup (see "Partial support" above).
 
 ## Project layout
 
@@ -226,13 +260,15 @@ plasmoid/                              KPackage source for the widget itself
     ui/
       main.qml                         panel button, polling, power-axis + toggle orchestration
       SystemController.qml             services + power-profile axes (no root needed)
+      ChromeController.qml             browser deprioritize/memory-reclaim axis (no root needed)
       config/ConfigGeneral.qml         settings page: power axis
-      config/ConfigAdvanced.qml        settings page: services + power-profile axes
+      config/ConfigAdvanced.qml        settings page: services + power-profile + browser axes
     config/
       main.xml                         KConfigXT schema
       config.qml                       lists both settings pages above
 
 gpu-boost-helper.sh                    root-run helper (on/off/status), strict arg validation
+chrome-boost-helper.sh                 unprivileged helper for the browser axis
 com.kinsman4249.gpuboost.policy        polkit policy authorizing the helper via pkexec
 install.sh                             interactive installer (see Manual install above)
 uninstall.sh                           interactive uninstaller (see Uninstall above)
@@ -267,6 +303,20 @@ uninstall.sh                           interactive uninstaller (see Uninstall ab
   to characters valid in a systemd unit name before being used in any
   command, since it is interpolated into a plain command string rather
   than passed through `gpu-boost-helper.sh`'s stricter validation.
+- The browser axis's process pattern is restricted (both in
+  `ChromeController.qml` and again inside `chrome-boost-helper.sh` itself)
+  to `[A-Za-z0-9._|-]` - no shell metacharacters, since it is passed to
+  `pgrep -f`/`grep -E` as a pattern, never through `eval` or a
+  constructed shell string. `chrome-boost-helper.sh` never runs as root,
+  so this validation is about correctness (matching the right processes),
+  not a privilege boundary.
+- `chrome-boost-helper.sh`'s memory-reclaim step only ever writes to a
+  cgroup's `memory.reclaim` after confirming that cgroup's own name (the
+  last path component systemd/Flatpak assigned it) matches the same
+  process pattern. That check is what stops it from ever reclaiming
+  memory from some shared parent slice (e.g. the whole user session)
+  that happens to also contain unrelated processes - it only fires on a
+  cgroup dedicated to that one browser instance.
 - The "GPU power unsupported" icon rendering uses a composite approach:
   the flame icon rendered as a mask (recoloured to panel text colour)
   with the bolt icon drawn on top in its own fixed yellow. This is

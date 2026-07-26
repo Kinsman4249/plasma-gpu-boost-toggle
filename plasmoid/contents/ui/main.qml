@@ -6,7 +6,7 @@ import org.kde.kirigami as Kirigami
 
 // GPU Boost Toggle
 //
-// A panel button that flips a "boost" state on and off across up to three
+// A panel button that flips a "boost" state on and off across up to four
 // independent axes:
 //   - Power: an NVIDIA GPU's power-limit + persistence-mode profile,
 //     handled inline below via nvidia-smi/gpu-boost-helper.sh.
@@ -14,6 +14,9 @@ import org.kde.kirigami as Kirigami
 //     etc.), handled by SystemController.qml.
 //   - Power profile: switching to the "performance" power-profiles-daemon
 //     profile, also handled by SystemController.qml.
+//   - Browser: deprioritizing matching browser processes (nice/ionice)
+//     and a one-shot memory push to swap/cache, handled by
+//     ChromeController.qml.
 // Each axis is probed and toggled independently, so a laptop GPU that
 // rejects the power-limit change (common - see powerUnsupported below)
 // still gets the benefit of whichever other axes this system supports,
@@ -32,7 +35,7 @@ PlasmoidItem {
 	// Bumped whenever this file (or its config pages) changes in a way
 	// worth mentioning in a bug report. Only surfaced when debug logging
 	// is on, see contents/ui/config/ConfigGeneral.qml.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.6"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.7"
 
 	readonly property int defaultWatts: Plasmoid.configuration.defaultWatts
 	readonly property int boostWatts: Plasmoid.configuration.boostWatts
@@ -69,9 +72,19 @@ PlasmoidItem {
 		onLogMessage: (msg) => root.log(msg)
 	}
 
+	// Owns the browser-deprioritization axis. Same independent-axis
+	// pattern as systemController above - see ChromeController.qml.
+	property ChromeController chromeController: ChromeController {
+		enabled: Plasmoid.configuration.chromeIdlingEnabled
+		processPattern: Plasmoid.configuration.chromeProcessPattern
+		niceValue: Plasmoid.configuration.chromeNiceValue
+		debugLogging: root.debugLogging
+		onLogMessage: (msg) => root.log(msg)
+	}
+
 	// True the moment ANY enabled axis is currently boosted/idled/maxed -
 	// drives the on/off icon and isMask.
-	readonly property bool anyBoosted: powerBoosted || systemController.servicesIdled || systemController.powerProfileMaxed
+	readonly property bool anyBoosted: powerBoosted || systemController.servicesIdled || systemController.powerProfileMaxed || chromeController.chromeDeprioritized
 
 	// True only once every ENABLED axis that also turns out to be
 	// supported on this system is actually in its boosted state. An axis
@@ -81,6 +94,7 @@ PlasmoidItem {
 		(powerUnsupported || powerBoosted)
 		&& (!systemController.idlingEnabled || systemController.servicesIdled)
 		&& (systemController.powerProfileUnsupported || !systemController.profileEnabled || systemController.powerProfileMaxed)
+		&& (chromeController.chromeUnsupported || !chromeController.enabled || chromeController.chromeDeprioritized)
 
 	// True only when literally nothing enabled is supported here - this
 	// is the "the whole widget is useless on this system" case, distinct
@@ -90,8 +104,9 @@ PlasmoidItem {
 		powerUnsupported
 		&& !systemController.idlingEnabled
 		&& (systemController.powerProfileUnsupported || !systemController.profileEnabled)
+		&& (chromeController.chromeUnsupported || !chromeController.enabled)
 
-	readonly property bool overallBusy: busy || systemController.busy
+	readonly property bool overallBusy: busy || systemController.busy || chromeController.busy
 
 	// Bolt-coloured/flame-masked rendering (see BoostIcon.qml) only when
 	// something is ACTUALLY boosted via a non-GPU axis while the GPU axis
@@ -146,6 +161,17 @@ PlasmoidItem {
 			lines.push(systemController.powerProfileUnsupported
 				? i18n("Power profile: unsupported")
 				: (systemController.powerProfileMaxed ? i18n("Power profile: performance") : i18n("Power profile: normal")))
+		}
+		if (chromeController.enabled) {
+			if (chromeController.chromeUnsupported) {
+				lines.push(i18n("Browser: unsupported"))
+			} else if (chromeController.chromeDeprioritized) {
+				lines.push(chromeController.chromeMemoryReclaimed
+					? i18n("Browser: deprioritized + memory reclaimed")
+					: i18n("Browser: deprioritized"))
+			} else {
+				lines.push(i18n("Browser: normal"))
+			}
 		}
 		return lines.join("\n")
 	}
@@ -247,6 +273,7 @@ PlasmoidItem {
 		// whether it's supported before the user ever opens settings -
 		// never repeated on the polling timer.
 		systemController.probePowerProfile()
+		chromeController.probe()
 	}
 
 	function toggle() {
@@ -259,10 +286,12 @@ PlasmoidItem {
 			root.log("requesting BOOST (" + boostWatts + " W)")
 			executable.exec("pkexec /usr/local/bin/gpu-boost-helper.sh on " + boostWatts)
 			systemController.activate()
+			chromeController.activate()
 		} else {
 			root.log("requesting OFF (" + defaultWatts + " W)")
 			executable.exec("pkexec /usr/local/bin/gpu-boost-helper.sh off " + defaultWatts)
 			systemController.deactivate()
+			chromeController.deactivate()
 		}
 	}
 

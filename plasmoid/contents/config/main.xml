@@ -48,5 +48,17 @@
       <default>false</default>
       <label>Switch to the performance power profile while boosted.</label>
     </entry>
+    <entry name="chromeIdlingEnabled" type="Bool">
+      <default>false</default>
+      <label>Deprioritize matching browser processes while boosted.</label>
+    </entry>
+    <entry name="chromeProcessPattern" type="String">
+      <default>chrome|chromium</default>
+      <label>Extended-regex pattern (grep -E) matched against process command lines to find browser processes to deprioritize.</label>
+    </entry>
+    <entry name="chromeNiceValue" type="Int">
+      <default>15</default>
+      <label>Nice value (0-19) applied to matching browser processes while boosted.</label>
+    </entry>
   </group>
 </kcfg>

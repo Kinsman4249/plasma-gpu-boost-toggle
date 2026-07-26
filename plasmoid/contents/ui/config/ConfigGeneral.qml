@@ -19,7 +19,7 @@ Kirigami.FormLayout {
 	// Build/version stamp, only shown when debug logging is on, so it is
 	// easy to tell which build a bug report came from. Bump the date
 	// suffix (YYYY-MM-DD.N) whenever this plasmoid is changed.
-	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.4"
+	readonly property string versionStamp: "gpu-boost-toggle 2026-07-26.7"
 
 	// Unprivileged DataSource used only to read power.min_limit /
 	// power.default_limit / power.max_limit from nvidia-smi, both to

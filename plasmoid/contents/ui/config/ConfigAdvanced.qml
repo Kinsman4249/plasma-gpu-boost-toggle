@@ -17,6 +17,9 @@ Kirigami.FormLayout {
 	property alias cfg_idleKalarm: idleKalarmCheck.checked
 	property alias cfg_customIdleUnits: customUnitsField.text
 	property alias cfg_powerProfileEnabled: profileEnabledCheck.checked
+	property alias cfg_chromeIdlingEnabled: chromeEnabledCheck.checked
+	property alias cfg_chromeProcessPattern: chromePatternField.text
+	property alias cfg_chromeNiceValue: chromeNiceField.value
 
 	QQC2.Label {
 		Kirigami.FormData.isSection: true
@@ -90,5 +93,50 @@ Kirigami.FormLayout {
 			+ "previous profile is restored exactly when you turn BOOST off. If this "
 			+ "system has no \"performance\" profile available, this option has no "
 			+ "effect and is reported as unsupported in the widget's tooltip.")
+	}
+
+	QQC2.Label {
+		Kirigami.FormData.isSection: true
+		text: i18n("Browser")
+	}
+
+	QQC2.CheckBox {
+		id: chromeEnabledCheck
+		Kirigami.FormData.label: i18n("Deprioritize browser while boosted:")
+		text: i18n("Lower CPU/IO priority for matching browser processes")
+	}
+
+	QQC2.TextField {
+		id: chromePatternField
+		Kirigami.FormData.label: i18n("Process pattern:")
+		placeholderText: "chrome|chromium"
+		enabled: chromeEnabledCheck.checked
+		Layout.fillWidth: true
+	}
+
+	QQC2.SpinBox {
+		id: chromeNiceField
+		Kirigami.FormData.label: i18n("Nice value:")
+		from: 0
+		to: 19
+		stepSize: 1
+		enabled: chromeEnabledCheck.checked
+	}
+
+	QQC2.Label {
+		Kirigami.FormData.label: ""
+		wrapMode: Text.WordWrap
+		opacity: 0.8
+		text: i18n("Matches process command lines against the pattern above (an "
+			+ "extended-regex alternation of names, e.g. \"chrome|chromium|brave\") "
+			+ "and lowers their CPU nice value and sets idle I/O class - no root "
+			+ "needed, since you can always deprioritize your own processes. "
+			+ "Reapplied every time you turn BOOST on, so new tabs/renderer "
+			+ "processes started afterward are not covered until the next toggle. "
+			+ "Also makes a one-shot attempt to push that browser's idle memory out "
+			+ "to swap/cache via cgroup v2, but only when the browser is confined to "
+			+ "its own cgroup (true for Flatpak browsers; not guaranteed for a "
+			+ "natively-installed one) - otherwise that part is silently skipped so "
+			+ "it never risks reclaiming memory from anything else.")
 	}
 }

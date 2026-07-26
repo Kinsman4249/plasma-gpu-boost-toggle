@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
 # install.sh - one-time interactive installer for GPU Boost Toggle's
-# root-owned files (the helper script and the polkit policy).
+# root-owned files (the helper script and the polkit policy), plus the
+# browser-deprioritize helper (chrome-boost-helper.sh), which needs no
+# root and is installed under the user's own home instead.
 #
-# This script only handles the two files that need root. The plasmoid
-# itself is not installed here: build it with ./build-plasmoid.sh and
+# The plasmoid itself is not installed here: build it with ./build-plasmoid.sh and
 # then either run `kpackagetool6 -t Plasma/Applet -i gpu-boost-toggle.plasmoid`
 # or use Plasma's "Add Widgets > Get New... > Install Widget From Local
 # File..." dialog to install the resulting .plasmoid file. That lets you
@@ -24,6 +25,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HELPER_SRC="$SCRIPT_DIR/gpu-boost-helper.sh"
 HELPER_DEST="/usr/local/bin/gpu-boost-helper.sh"
+
+# Unlike gpu-boost-helper.sh above, this one never needs root (see its own
+# header comment), so it lives under the user's own home rather than
+# /usr/local/bin - no sudo prompt for a script that never elevates.
+CHROME_HELPER_SRC="$SCRIPT_DIR/chrome-boost-helper.sh"
+CHROME_HELPER_DEST="$HOME/.local/share/plasma-gpu-boost-toggle/chrome-boost-helper.sh"
 
 # /usr/share/polkit-1/actions lives on the read-only /usr tree on
 # ostree-based systems (Bazzite, Silverblue, etc.), so writing there always
@@ -94,6 +101,7 @@ command -v pkaction >/dev/null 2>&1 \
 	|| fail "polkit tools not found. Is polkit installed?"
 
 [ -f "$HELPER_SRC" ] || fail "missing $HELPER_SRC"
+[ -f "$CHROME_HELPER_SRC" ] || fail "missing $CHROME_HELPER_SRC"
 [ -f "$POLICY_SRC" ] || fail "missing $POLICY_SRC"
 for name in "${ICON_NAMES[@]}"; do
 	[ -f "$ICON_SRC_DIR/$name.svg" ] || fail "missing $ICON_SRC_DIR/$name.svg"
@@ -149,6 +157,15 @@ polkit.addRule(function(action, subject) {
 });
 RULES
 sudo chmod 0644 "$POLKIT_RULE_DEST"
+
+# ---------------------------------------------------------------------------
+# Chrome helper install (no sudo: never elevates, lives under the user's
+# own home)
+# ---------------------------------------------------------------------------
+
+step "Installing browser-deprioritize helper to $CHROME_HELPER_DEST"
+install -D -m 0755 "$CHROME_HELPER_SRC" "$CHROME_HELPER_DEST" \
+	|| fail "failed to install $CHROME_HELPER_DEST"
 
 # ---------------------------------------------------------------------------
 # Icon install (no sudo: this lives entirely under the user's home)
